@@ -3,8 +3,6 @@ import { ethers } from "ethers";
 import { GomokuABI } from "../contract/gomokuABI";
 import { GOMOKU_ADDRESS } from "../contract/gomokuConfig";
 import { CONTRACT_ADDRESS } from "../contract/contractConfig";
-import GomokuArtifact from "../game1/artifacts/contracts/Gomoku.sol/Gomoku.json";
-import { UserVaultABI } from "../contract/contractABI";
 import { game1Bg } from "../backgroundImage";
 
 const STATUS = {
@@ -18,15 +16,36 @@ function toWei(v) {
 }
 
 const cellStyle = (isMyTurn, value) => ({
-  width: 28,
-  height: 28,
-  border: "1px solid #ccc",
+  width: 34,
+  height: 34,
+  border: "1px solid rgba(0,0,0,0.15)",
+  background: "rgba(255,255,255,0.75)",
+  backgroundImage:
+    value === 0
+      ? "none"
+      : (value === 1
+          ? "radial-gradient(circle at 35% 35%, #555 0%, #111 70%)"
+          : "radial-gradient(circle at 35% 35%, #fff 0%, #e6e6e6 70%)"),
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "center",
+  backgroundSize: "22px 22px",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.4)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: 14,
+  fontSize: 0,
   cursor: value === 0 && isMyTurn ? "pointer" : "default",
-  backgroundColor: value === 1 ? "#222" : value === 2 ? "#eee" : "#fff",
+});
+
+const pieceStyle = (val) => ({
+  width: 22,
+  height: 22,
+  borderRadius: "50%",
+  boxShadow: "0 2px 3px rgba(0,0,0,0.25)",
+  background: val === 1
+    ? "radial-gradient(circle at 35% 35%, #555 0%, #111 70%)"
+    : "radial-gradient(circle at 35% 35%, #fff 0%, #e6e6e6 70%)",
+  border: val === 2 ? "1px solid #d6d6d6" : "none",
 });
 
 export default function Game1Page({ onBack }) {
@@ -54,9 +73,9 @@ export default function Game1Page({ onBack }) {
   const [error, setError] = useState("");
 
   const resolveGomokuAddress = () => {
+    if (ethers.utils.isAddress(GOMOKU_ADDRESS)) return GOMOKU_ADDRESS;
     const stored = window.localStorage?.getItem("gomokuAddress");
     if (stored && ethers.utils.isAddress(stored)) return stored;
-    if (ethers.utils.isAddress(GOMOKU_ADDRESS)) return GOMOKU_ADDRESS;
     return "";
   };
 
@@ -95,27 +114,6 @@ export default function Game1Page({ onBack }) {
   const refreshState = useCallback(async () => {
     if (!contract || !account) return;
     try {
-      // ensure vault info is up to date
-      try {
-        const v = await contract.userVault();
-        setVaultInGomoku(v);
-        const match = v && CONTRACT_ADDRESS && ethers.utils.isAddress(CONTRACT_ADDRESS)
-          ? v.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
-          : false;
-        setVaultMatches(match);
-      } catch {}
-
-      // load vault balance for current user
-      try {
-        if (signer && ethers.utils.isAddress(CONTRACT_ADDRESS)) {
-          const vault = new ethers.Contract(CONTRACT_ADDRESS, UserVaultABI, signer);
-          const info = await vault.getUserInfo();
-          // info: [username, balance, frozen]
-          setVaultBalance(info[1]);
-        }
-      } catch (e) {
-        // ignore if not logged in within vault context
-      }
 
       const gid = await contract.playerCurrentGame(account);
       const idNum = Number(gid);
@@ -157,76 +155,29 @@ export default function Game1Page({ onBack }) {
     return gameDetails.turn?.toLowerCase() === account.toLowerCase() && gameDetails.status === 1;
   }, [gameDetails, account]);
 
-  const canInteract = useMemo(() => {
-    if (!gomokuAddress) return false;
-    if (vaultMatches === null) return true; // unknown yet, don't block
-    return !!vaultMatches;
-  }, [gomokuAddress, vaultMatches]);
+  const canInteract = useMemo(() => !!gomokuAddress, [gomokuAddress]);
 
   const stakeWei = useMemo(() => toWei(stakeInput), [stakeInput]);
-  const balanceEnoughForCreate = useMemo(() => {
-    if (!vaultBalance || !stakeWei) return true; // don't block typing
-    try { return ethers.BigNumber.from(vaultBalance).gte(stakeWei); } catch { return true; }
-  }, [vaultBalance, stakeWei]);
-  const balanceEnoughForJoin = useMemo(() => {
-    if (!vaultBalance || !gameDetails?.stake) return true;
-    try { return ethers.BigNumber.from(vaultBalance).gte(gameDetails.stake); } catch { return true; }
-  }, [vaultBalance, gameDetails]);
+  const balanceEnoughForCreate = true;
+  const balanceEnoughForJoin = true;
 
   const handleUseAddress = () => {
-    try {
-      if (!ethers.utils.isAddress(addressInput)) {
-        setError("Invalid address");
-        return;
-      }
-      window.localStorage?.setItem("gomokuAddress", addressInput);
-      setGomokuAddress(addressInput);
-      if (signer) {
-        const c = new ethers.Contract(addressInput, GomokuABI, signer);
-        setContract(c);
-        setError("");
-        refreshState();
-      }
-    } catch (e) {
-      setError(e?.message || "Failed to use address");
-    }
+    // simplified UI: address is taken from config/localStorage
   };
 
   const handleDeploy = async () => {
-    if (!signer) return;
-    try {
-      if (!ethers.utils.isAddress(CONTRACT_ADDRESS)) {
-        setError("Invalid UserVault address in config");
-        return;
-      }
-      setPendingDeploy(true);
-      setError("");
-      const factory = new ethers.ContractFactory(GomokuArtifact.abi, GomokuArtifact.bytecode, signer);
-      const contract = await factory.deploy(CONTRACT_ADDRESS);
-      const receipt = await contract.deployTransaction.wait();
-      const addr = contract.address;
-      window.localStorage?.setItem("gomokuAddress", addr);
-      setGomokuAddress(addr);
-      const c = new ethers.Contract(addr, GomokuABI, signer);
-      setContract(c);
-      // Informational hint: must be whitelisted in UserVault by the vault owner
-    } catch (e) {
-      console.error(e);
-      setError(e?.data?.message || e?.message || "Deploy failed");
-    } finally {
-      setPendingDeploy(false);
-    }
+    // removed from minimal UI
   };
 
   const handleCreate = async () => {
     if (!contract) return;
-    if (!canInteract) { setError("UserVault mismatch; fix before creating a game."); return; }
+    
     const wei = stakeWei;
     if (!wei || wei.lte(0)) {
       setError("Invalid stake amount");
       return;
     }
-    if (!balanceEnoughForCreate) { setError("Insufficient vault balance for stake"); return; }
+    
     try {
       setCreating(true);
       setError("");
@@ -243,13 +194,13 @@ export default function Game1Page({ onBack }) {
 
   const handleJoin = async () => {
     if (!contract) return;
-    if (!canInteract) { setError("UserVault mismatch; fix before joining a game."); return; }
+    
     const id = Number(joinIdInput);
     if (!id || id <= 0) {
       setError("Invalid game ID");
       return;
     }
-    if (!balanceEnoughForJoin) { setError("Insufficient vault balance to join this game"); return; }
+    
     try {
       setJoining(true);
       setError("");
@@ -285,9 +236,15 @@ export default function Game1Page({ onBack }) {
   return (
     <div style={styles.container}>
       <button style={styles.backButton} onClick={onBack}>Back</button>
-      <h2 style={{ color: "#fff" }}>Gomoku (Game 1)</h2>
       {error && <div style={styles.error}>{error}</div>}
 
+      <div style={styles.headerRow}>
+        <h2 style={{ color: "#fff", margin: 0 }}>Gomoku</h2>
+        <div style={styles.tag}>Contract: {gomokuAddress ? shortAddr(gomokuAddress) : "not set"}</div>
+      </div>
+
+      {/* Address setup / deploy (hidden) */}
+      <div style={{display:'none'}}>
       {/* Address setup / deploy */}
       <div style={styles.stateCard}>
         <div><strong>Gomoku Contract:</strong> {gomokuAddress || "(not set)"}</div>
@@ -335,6 +292,7 @@ export default function Game1Page({ onBack }) {
             )}
           </div>
         )}
+      </div>
       </div>
 
       <div style={styles.actionsRow}>
@@ -388,7 +346,7 @@ export default function Game1Page({ onBack }) {
       </div>
 
       {currentGameId > 0 && board && board.length === 15 && (
-        <div style={styles.board}>
+        <div style={styles.boardWrap}><div style={styles.board}>
           {board.map((row, x) => (
             <div key={x} style={styles.boardRow}>
               {row.map((val, y) => (
@@ -398,12 +356,12 @@ export default function Game1Page({ onBack }) {
                   onClick={() => (myTurn && !moving && val === 0 ? handleMove(x, y) : null)}
                   title={val === 0 ? "" : val === 1 ? "Black" : "White"}
                 >
-                  {val === 0 ? "" : val === 1 ? "●" : "○"}
+                  {val !== 0 && <div style={pieceStyle(val)} />}
                 </div>
               ))}
             </div>
           ))}
-        </div>
+        </div></div>
       )}
     </div>
   );
@@ -422,6 +380,7 @@ const styles = {
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
     overflow: "auto",
+    textAlign: "center",
   },
   backButton: {
     position: "absolute",
@@ -434,18 +393,34 @@ const styles = {
     color: "#fff",
     cursor: "pointer",
   },
+  headerRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  tag: {
+    background: "rgba(0,0,0,0.35)",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.25)",
+    padding: "6px 10px",
+    borderRadius: 8,
+  },
   actionsRow: {
     display: "flex",
     gap: 16,
     flexWrap: "wrap",
-    marginTop: 60,
+    justifyContent: "center",
+    marginTop: 24,
     marginBottom: 12,
   },
   card: {
-    background: "rgba(255,255,255,0.9)",
+    background: "rgba(255,255,255,0.92)",
     borderRadius: 8,
     padding: 16,
     minWidth: 260,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+    textAlign: "center",
   },
   cardTitle: {
     fontWeight: 600,
@@ -465,6 +440,7 @@ const styles = {
     border: "none",
     borderRadius: 6,
     cursor: "pointer",
+    boxShadow: "0 2px 8px rgba(0,123,255,0.3)",
   },
   hint: {
     fontSize: 12,
@@ -472,10 +448,12 @@ const styles = {
     marginTop: 8,
   },
   stateCard: {
-    background: "rgba(255,255,255,0.9)",
+    background: "rgba(255,255,255,0.92)",
     borderRadius: 8,
     padding: 16,
     marginBottom: 12,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+    textAlign: "center",
   },
   error: {
     background: "#ffe5e5",
@@ -500,11 +478,26 @@ const styles = {
   },
   board: {
     display: "inline-block",
-    padding: 8,
-    background: "rgba(255,255,255,0.95)",
-    borderRadius: 8,
+    padding: 10,
+    background: "linear-gradient(135deg, #f7e3b2 0%, #f2d089 100%)",
+    borderRadius: 10,
+    border: "1px solid rgba(0,0,0,0.15)",
+    boxShadow: "0 10px 24px rgba(0,0,0,0.2)",
   },
   boardRow: {
     display: "flex",
   },
+  boardWrap: {
+    display: "flex",
+    justifyContent: "center",
+    marginTop: 12,
+  },
 };
+
+function shortAddr(a){
+  if (!a) return "";
+  return `${a.slice(0,6)}...${a.slice(-4)}`;
+}
+
+
+
