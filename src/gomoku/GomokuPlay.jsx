@@ -55,7 +55,9 @@ const stoneStyle = (cell) => {
   if (cell === 1) {
     return {
       ...base,
-      background: '#222'
+      background: 'radial-gradient(circle at 35% 30%, rgba(255,255,255,0.15) 0%, #2b2b2b 55%, #111111 85%)',
+      border: '2px solid rgba(0,0,0,0.5)',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.25), inset 0 1px 2px rgba(255,255,255,0.1)'
     };
   }
   if (cell === 2) {
@@ -88,6 +90,8 @@ export default function GomokuPlay() {
   const [endedNotified, setEndedNotified] = useState(false);
   const [resultVisible, setResultVisible] = useState(false);
   const [resultText, setResultText] = useState("");
+  const [claimingTimeout, setClaimingTimeout] = useState(false);
+  const [resigning, setResigning] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -202,6 +206,25 @@ export default function GomokuPlay() {
 
   const goBack = () => navigate("/game1");
 
+  const handleResign = async () => {
+    if (!gameDetails || gameDetails.status !== 1) return;
+    try {
+      setResigning(true);
+      setError("");
+      const { gomokuContract } = getContracts();
+      // Call contract forfeit (surrender)
+      const tx = await gomokuContract.forfeit(gameId);
+      await tx.wait();
+    } catch (e) {
+      console.error(e);
+      const msg = e?.shortMessage || e?.reason || e?.message || "Resign failed";
+      setError(msg.indexOf('function') >= 0 && msg.indexOf('forfeit') >= 0 ?
+        "Forfeit is not supported on this contract version." : msg);
+    } finally {
+      setResigning(false);
+    }
+  };
+
   return (
     <div style={styles.container}>
       <button style={styles.backButton} onClick={goBack}>Back</button>
@@ -218,6 +241,17 @@ export default function GomokuPlay() {
           <div><strong>Stake:</strong> {ethers.formatEther(gameDetails.stake || 0)} ETH</div>
           {gameDetails.status === 2 && (
             <div><strong>Winner:</strong> {gameDetails.winner === ethers.ZeroAddress ? "Draw" : gameDetails.winner}</div>
+          )}
+          {gameDetails.status === 1 && account && (account.toLowerCase() === gameDetails.players?.[0]?.toLowerCase() || account.toLowerCase() === gameDetails.players?.[1]?.toLowerCase()) && (
+            <div style={{ marginTop: 8 }}>
+              <button
+                style={{ ...styles.primaryBtn, backgroundColor: '#dc3545' }}
+                onClick={handleResign}
+                disabled={resigning}
+              >
+                {resigning ? 'Forfeiting...' : 'Forfeit'}
+              </button>
+            </div>
           )}
           {gameDetails.status === 0 && account && gameDetails.players?.[0] &&
             account.toLowerCase() === gameDetails.players[0].toLowerCase() && (
