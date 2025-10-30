@@ -61,8 +61,9 @@ const stoneStyle = (cell) => {
   if (cell === 2) {
     return {
       ...base,
-      background: '#fafafa',
-      border: '1px solid rgba(0,0,0,0.1)'
+      background: 'radial-gradient(circle at 35% 30%, #ffffff 0%, #f2f2f2 55%, #e0e0e0 85%)',
+      border: '2px solid rgba(0,0,0,0.28)',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.18), inset 0 1px 2px rgba(255,255,255,0.9)'
     };
   }
   return base;
@@ -153,7 +154,7 @@ export default function GomokuPlay() {
   useEffect(() => {
     const timer = setInterval(() => {
       refresh();
-    }, 50);
+    }, 5);
     return () => clearInterval(timer);
   }, [refresh]);
 
@@ -429,6 +430,23 @@ const styles = {
     border: "1px solid #d6d9dd",
     borderRadius: 6,
     cursor: "pointer",
+  },
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.45)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  },
+  resultCard: {
+    width: "min(420px, 90%)",
+    background: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+    textAlign: "center",
   },
   error: {
     background: "#ffe5e5",
