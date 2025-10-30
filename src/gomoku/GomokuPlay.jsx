@@ -4,20 +4,67 @@ import { ethers } from "ethers";
 import { game1Bg } from "../backgroundImage";
 import { getContracts } from "../contract/contractService";
 
-const cellStyle = (isMyTurn, value) => ({
-  width: 32,
-  height: 32,
-  border: "1px solid #ddd",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 18,
-  borderRadius: 6,
-  transition: "background-color 120ms ease, transform 80ms ease",
-  cursor: value === 0 && isMyTurn ? "pointer" : "default",
-  backgroundColor: value === 0 && isMyTurn ? "#f7fbff" : "#fff",
-  boxShadow: "inset 0 0 2px rgba(0,0,0,0.05)",
-});
+const CELL_SIZE = 36; // px per grid cell
+const cellStyle = (isMyTurn, value) => {
+  const style = {
+    width: CELL_SIZE,
+    height: CELL_SIZE,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 0,
+    transition: "background-color 120ms ease, transform 80ms ease",
+    cursor: value === 0 && isMyTurn ? "pointer" : "default",
+    backgroundColor: value === 0 && isMyTurn ? "rgba(0,0,0,0.025)" : "transparent",
+  };
+  if (value === 1) {
+    style.background =
+      "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), rgba(0,0,0,0.1) 40%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.85))";
+    style.backgroundColor = "#222";
+    style.boxShadow = "inset 0 1px 2px rgba(255,255,255,0.25), 0 4px 8px rgba(0,0,0,0.25)";
+    style.borderRadius = "50%";
+    style.margin = 5;
+  } else if (value === 2) {
+    style.background =
+      "radial-gradient(circle at 30% 30%, #fff, #f1f1f1 40%, #e2e2e2 70%, #d6d6d6)";
+    style.backgroundColor = "#f9f9f9";
+    style.boxShadow = "inset 0 2px 2px rgba(255,255,255,0.8), 0 3px 6px rgba(0,0,0,0.15)";
+    style.border = "1px solid rgba(0,0,0,0.08)";
+    style.borderRadius = "50%";
+    style.margin = 5;
+  }
+  return style;
+};
+
+const stoneStyle = (cell) => {
+  const base = {
+    width: CELL_SIZE - 10,
+    height: CELL_SIZE - 10,
+    borderRadius: "50%",
+    boxShadow:
+      cell === 1
+        ? "inset 0 1px 2px rgba(255,255,255,0.25), 0 4px 8px rgba(0,0,0,0.25)"
+        : "inset 0 2px 2px rgba(255,255,255,0.8), 0 3px 6px rgba(0,0,0,0.15)",
+  };
+  if (cell === 1) {
+    return {
+      ...base,
+      background:
+        "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), rgba(0,0,0,0.1) 40%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.85))",
+      backgroundColor: "#222",
+    };
+  }
+  if (cell === 2) {
+    return {
+      ...base,
+      background:
+        "radial-gradient(circle at 30% 30%, #fff, #f1f1f1 40%, #e2e2e2 70%, #d6d6d6)",
+      backgroundColor: "#f9f9f9",
+      border: "1px solid rgba(0,0,0,0.08)",
+    };
+  }
+  return { display: "none" };
+};
 
 const STATUS = { 0: "Lobby", 1: "In Progress", 2: "Finished" };
 
@@ -126,7 +173,13 @@ export default function GomokuPlay() {
       )}
 
       {board && board.length > 0 && (
-        <div style={styles.board}>
+        <div style={{
+          ...styles.board,
+          backgroundImage:
+            "linear-gradient(#b78b45 1px, transparent 1px), linear-gradient(90deg, #b78b45 1px, transparent 1px)",
+          backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
+          backgroundPosition: "12px 12px",
+        }}>
           {board.map((row, x) => (
             <div key={x} style={styles.boardRow}>
               {row.map((cell, y) => (
@@ -231,14 +284,13 @@ const styles = {
     display: "inline-block",
     margin: "24px auto",
     padding: 12,
-    background: "rgba(255,255,255,0.96)",
+    background: "#f6e3b4",
     borderRadius: 12,
-    border: "1px solid rgba(0,0,0,0.08)",
-    boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
+    border: "3px solid #b78b45",
+    boxShadow: "0 6px 20px rgba(0,0,0,0.15), inset 0 0 0 2px #b78b45, inset 0 0 25px rgba(0,0,0,0.06)",
   },
   boardRow: {
     display: "flex",
-    gap: 2,
+    gap: 0,
   },
 };
-

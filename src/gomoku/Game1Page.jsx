@@ -251,6 +251,7 @@ export default function Game1Page({ onBack }) {
         {!balanceEnoughForCreate && stakeInput && (
           <div style={styles.warn}>Insufficient balance to create with current stake.</div>
         )}
+        
       </div>
 
   <div style={styles.actionsRow}>
@@ -320,13 +321,21 @@ export default function Game1Page({ onBack }) {
                   <div style={{ flex: 3 }}>{ethers.formatEther(g.stake)} ETH</div>
                   <div style={{ flex: 2 }}>
                     {isCreator ? (
-                      <button
-                        style={styles.dangerBtn}
-                        disabled={cancellingId === g.id}
-                        onClick={() => handleCancel(g.id)}
-                      >
-                        {cancellingId === g.id ? "Cancelling..." : "Cancel"}
-                      </button>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          style={styles.primaryBtn}
+                          onClick={() => navigate(`/game1/${g.id}`)}
+                        >
+                          Enter
+                        </button>
+                        <button
+                          style={styles.dangerBtn}
+                          disabled={cancellingId === g.id}
+                          onClick={() => handleCancel(g.id)}
+                        >
+                          {cancellingId === g.id ? "Cancelling..." : "Cancel"}
+                        </button>
+                      </div>
                     ) : (
                       <button
                         style={styles.primaryBtn}
