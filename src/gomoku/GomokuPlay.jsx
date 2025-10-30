@@ -5,7 +5,7 @@ import { game1Bg } from "../backgroundImage";
 import { getContracts } from "../contract/contractService";
 
 const CELL_SIZE = 32;
-const TURN_TIMEOUT = 60; // seconds, keep in sync with contract
+const TURN_TIMEOUT = 90; // seconds, keep in sync with contract
 
 // Classic white cell style
 const cellStyleClassic = (isMyTurn, value) => ({
@@ -93,6 +93,8 @@ export default function GomokuPlay() {
   const [resultText, setResultText] = useState("");
   const [claimingTimeout, setClaimingTimeout] = useState(false);
   const [resigning, setResigning] = useState(false);
+  const [timeLeftSec, setTimeLeftSec] = useState(null);
+  const [timeoutAutoTried, setTimeoutAutoTried] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -109,7 +111,8 @@ export default function GomokuPlay() {
           status: Number(details.status),
           winner: details.winner,
           stake: details.stake,
-          moveCount: Number(details.moveCount),\n          lastMoveTimestamp: Number(details.lastMoveTimestamp || 0),
+          moveCount: Number(details.moveCount),
+          lastMoveTimestamp: Number(details.lastMoveTimestamp || 0),
         });
         const b = await gomokuContract.getBoard(gameId);
         setBoard(b.map((row) => row.map((n) => Number(n))));
@@ -163,23 +166,74 @@ export default function GomokuPlay() {
     return () => clearInterval(timer);
   }, [refresh]);
 
-  // Result overlay: show once when game ends
+  // Countdown for each move based on lastMoveTimestamp
+  useEffect(() => {
+    const compute = () => {
+      if (!gameDetails || gameDetails.status !== 1) { setTimeLeftSec(null); return; }
+      const lastTs = Number(gameDetails.lastMoveTimestamp || 0);
+      if (!lastTs) { setTimeLeftSec(null); return; }
+      const nowSec = Math.floor(Date.now() / 1000);
+      const left = Math.max(0, TURN_TIMEOUT - (nowSec - lastTs));
+      setTimeLeftSec(left);
+    };
+    compute();
+    const t = setInterval(compute, 500);
+    return () => clearInterval(t);
+  }, [gameDetails]);
+
+  const formatTime = (sec) => {
+    const s = Math.max(0, Math.floor(sec || 0));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+    return `${pad(m)}:${pad(r)}`;
+  };
+
+  // Auto-claim timeout win when countdown reaches zero and I'm the opponent
+  const handleClaimTimeout = useCallback(async () => {
+    if (!gameDetails || gameDetails.status !== 1) return;
+    try {
+      setClaimingTimeout(true);
+      setError("");
+      const { gomokuContract } = getContracts();
+      const tx = await gomokuContract.claimWinByTimeout(gameId);
+      await tx.wait();
+      return true;
+    } catch (e) {
+      console.error(e);
+      const msg = e?.shortMessage || e?.reason || e?.message || "Claim timeout failed";
+      setError(msg);
+      // If chain says not yet reached, allow a retry shortly
+      if (typeof msg === 'string' && msg.toLowerCase().includes('timeout not yet reached')) {
+        setTimeout(() => setTimeoutAutoTried(false), 2000);
+      }
+      return false;
+    } finally {
+      setClaimingTimeout(false);
+    }
+  }, [gameDetails, gameId]);
+
   useEffect(() => {
     if (!gameDetails || !account) return;
-    if (gameDetails.status === 2 && !endedNotified) {
-      const isDraw = gameDetails.winner === ethers.ZeroAddress;
-      const iWin = !isDraw && (gameDetails.winner?.toLowerCase() === account.toLowerCase());
-      const msg = isDraw ? 'Game ended in a draw.' : (iWin ? 'You win!' : 'You lose.');
-      setResultText(msg);
-      setResultVisible(true);
-      setEndedNotified(true);
-    }
-    if (gameDetails.status !== 2 && endedNotified) {
-      setEndedNotified(false);
-      setResultVisible(false);
-      setResultText("");
-    }
-  }, [gameDetails?.status, gameDetails?.winner, account, endedNotified]);
+    // reset auto try flag whenever it's a new move/turn
+    setTimeoutAutoTried(false);
+  }, [gameDetails?.lastMoveTimestamp, gameDetails?.turn, account]);
+
+  useEffect(() => {
+    if (!gameDetails || !account) return;
+    if (gameDetails.status !== 1) return;
+    if (timeLeftSec !== 0) return;
+    const acc = account.toLowerCase();
+    const p0 = gameDetails.players?.[0]?.toLowerCase();
+    const p1 = gameDetails.players?.[1]?.toLowerCase();
+    const isPlayer = acc && (acc === p0 || acc === p1);
+    if (!isPlayer) return;
+    // Only opponent (not the one whose turn has timed out) can claim
+    if (gameDetails.turn && acc === gameDetails.turn.toLowerCase()) return;
+    if (timeoutAutoTried || claimingTimeout) return;
+    setTimeoutAutoTried(true);
+    handleClaimTimeout();
+  }, [timeLeftSec, gameDetails, account, timeoutAutoTried, claimingTimeout, handleClaimTimeout]);
 
   const myTurn = useMemo(() => {
     if (!gameDetails || !account) return false;
@@ -294,7 +348,18 @@ export default function GomokuPlay() {
 
         return (
           <div style={{ position: 'relative', display: 'inline-block' }}>
-                        {typeof timeLeftSec === 'number' && (\r\n              <div style={{ ...styles.timerBadge, background: timeLeftSec <= 10 ? 'rgba(220,53,69,0.9)' : 'rgba(0,0,0,0.6)' }} title={gameDetails?.turn ? Turn:  : ''}>\r\n                Time Left: {formatTime(timeLeftSec)}\r\n              </div>\r\n            )}\r\n{/* Board container */}
+            {typeof timeLeftSec === 'number' && (
+              <div
+                style={{
+                  ...styles.timerBadge,
+                  background: timeLeftSec <= 10 ? 'rgba(220,53,69,0.9)' : 'rgba(0,0,0,0.6)'
+                }}
+                title={gameDetails?.turn ? `Turn: ${gameDetails.turn}` : ''}
+              >
+                Time Left: {formatTime(timeLeftSec)}
+              </div>
+            )}
+            {/* Board container */}
             <div style={{ ...(boardTheme === 'wood' ? styles.boardWood : styles.board), position: 'relative' }}>
               {board.map((row, x) => (
                 <div key={x} style={{ ...styles.boardRow, gap }}>
@@ -490,7 +555,19 @@ const styles = {
     borderRadius: 6,
     marginTop: 8,
   },
-  timerBadge: {\r\n    position: 'absolute',\r\n    top: -28,\r\n    left: '50%',\r\n    transform: 'translateX(-50%)',\r\n    color: '#fff',\r\n    padding: '6px 10px',\r\n    borderRadius: 8,\r\n    fontWeight: 700,\r\n    fontSize: 14,\r\n    zIndex: 5,\r\n  },\r\n  board: {
+  timerBadge: {
+    position: 'absolute',
+    top: -28,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    color: '#fff',
+    padding: '6px 10px',
+    borderRadius: 8,
+    fontWeight: 700,
+    fontSize: 14,
+    zIndex: 5,
+  },
+  board: {
     display: "inline-block",
     margin: "24px auto",
     padding: 12,
@@ -531,6 +608,8 @@ const styles = {
     background: "#fff",
   },
 };
+
+
 
 
 
