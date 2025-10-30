@@ -43,7 +43,30 @@ const cellStyleWood = (isMyTurn, value, x, y, size) => ({
 const getCellStyle = (theme, isMyTurn, value, x, y, size) => {
   if (theme === 'wood') return cellStyleWood(isMyTurn, value, x, y, size);
   return cellStyleClassic(isMyTurn, value);
-};
+}
+// Use a fixed-diameter stone for both colors
+const STONE_SIZE = 24;
+const stoneStyle = (cell) => {
+  const base = {
+    width: STONE_SIZE,
+    height: STONE_SIZE,
+    borderRadius: '50%'
+  };
+  if (cell === 1) {
+    return {
+      ...base,
+      background: '#222'
+    };
+  }
+  if (cell === 2) {
+    return {
+      ...base,
+      background: '#fafafa',
+      border: '1px solid rgba(0,0,0,0.1)'
+    };
+  }
+  return base;
+};;
 
 
 const STATUS = { 0: "Lobby", 1: "In Progress", 2: "Finished" };
@@ -61,7 +84,9 @@ export default function GomokuPlay() {
   const [board, setBoard] = useState([]);
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState("");
-  
+  const [endedNotified, setEndedNotified] = useState(false);
+  const [resultVisible, setResultVisible] = useState(false);
+  const [resultText, setResultText] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -106,13 +131,49 @@ export default function GomokuPlay() {
     } catch {}
   }, [refresh]);
 
+  // Result overlay: show once when game ends
+  useEffect(() => {
+    if (!gameDetails || !account) return;
+    if (gameDetails.status === 2 && !endedNotified) {
+      const isDraw = gameDetails.winner === ethers.ZeroAddress;
+      const iWin = !isDraw && (gameDetails.winner?.toLowerCase() === account.toLowerCase());
+      const msg = isDraw ? 'Game ended in a draw.' : (iWin ? 'You win!' : 'You lose.');
+      setResultText(msg);
+      setResultVisible(true);
+      setEndedNotified(true);
+    }
+    if (gameDetails.status !== 2 && endedNotified) {
+      setEndedNotified(false);
+      setResultVisible(false);
+      setResultText("");
+    }
+  }, [gameDetails?.status, gameDetails?.winner, account, endedNotified]);
+
   // Periodic refresh of game details and board every 500ms
   useEffect(() => {
     const timer = setInterval(() => {
       refresh();
-    }, 500);
+    }, 50);
     return () => clearInterval(timer);
   }, [refresh]);
+
+  // Result overlay: show once when game ends
+  useEffect(() => {
+    if (!gameDetails || !account) return;
+    if (gameDetails.status === 2 && !endedNotified) {
+      const isDraw = gameDetails.winner === ethers.ZeroAddress;
+      const iWin = !isDraw && (gameDetails.winner?.toLowerCase() === account.toLowerCase());
+      const msg = isDraw ? 'Game ended in a draw.' : (iWin ? 'You win!' : 'You lose.');
+      setResultText(msg);
+      setResultVisible(true);
+      setEndedNotified(true);
+    }
+    if (gameDetails.status !== 2 && endedNotified) {
+      setEndedNotified(false);
+      setResultVisible(false);
+      setResultText("");
+    }
+  }, [gameDetails?.status, gameDetails?.winner, account, endedNotified]);
 
   const myTurn = useMemo(() => {
     if (!gameDetails || !account) return false;
@@ -211,7 +272,7 @@ export default function GomokuPlay() {
                       onClick={() => handleMove(x, y)}
                       title={`${topLetters[y]}${x + 1}`}
                     >
-                      {cell === 1 ? '\u25CF' : cell === 2 ? '\u25CB' : ''}
+                      {cell !== 0 && <div style={stoneStyle(cell)} />}
                     </div>
                   ))}
                 </div>
@@ -275,6 +336,18 @@ export default function GomokuPlay() {
           </div>
         );
       })()}
+      {resultVisible && (
+        <div style={styles.overlay}>
+          <div style={styles.resultCard}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Game Result</div>
+            <div style={{ marginBottom: 12 }}>{resultText}</div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button style={styles.primaryBtn} onClick={() => setResultVisible(false)}>Close</button>
+              <button style={styles.secondaryBtn} onClick={() => navigate("/game1")}>Back to Lobby</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -349,6 +422,14 @@ const styles = {
     borderRadius: 6,
     cursor: "pointer",
   },
+  secondaryBtn: {
+    padding: "8px 14px",
+    backgroundColor: "#e9ecef",
+    color: "#222",
+    border: "1px solid #d6d9dd",
+    borderRadius: 6,
+    cursor: "pointer",
+  },
   error: {
     background: "#ffe5e5",
     color: "#b00000",
@@ -397,6 +478,12 @@ const styles = {
     background: "#fff",
   },
 };
+
+
+
+
+
+
 
 
 
