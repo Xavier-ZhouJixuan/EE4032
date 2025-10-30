@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/ee4032_frontend/static/css/main.4efb37a3.css",
-    "main.js": "/ee4032_frontend/static/js/main.69d6c4bb.js",
+    "main.js": "/ee4032_frontend/static/js/main.bcec1ec6.js",
     "static/js/206.81f26a7f.chunk.js": "/ee4032_frontend/static/js/206.81f26a7f.chunk.js",
     "static/media/userInfo.jpeg": "/ee4032_frontend/static/media/userInfo.31ec24ac0b5d7cd081c4.jpeg",
     "static/media/register.jpeg": "/ee4032_frontend/static/media/register.7682d2665721693829f8.jpeg",
@@ -16,6 +16,6 @@
   },
   "entrypoints": [
     "static/css/main.4efb37a3.css",
-    "static/js/main.69d6c4bb.js"
+    "static/js/main.bcec1ec6.js"
   ]
 }
