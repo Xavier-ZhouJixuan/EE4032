@@ -12,6 +12,9 @@ import { game1Bg } from "../backgroundImage";
 // 导入统一的合约服务
 import { initEthers, getContracts } from "../contract/contractService";
 
+// Keep in sync with contract TURN_TIMEOUT
+const TURN_TIMEOUT = 90; // seconds
+
 
 const STATUS = {
   0: "Lobby",
@@ -51,6 +54,7 @@ export default function Game1Page({ onBack }) {
   const [openGames, setOpenGames] = useState([]);
   const [loadingOpen, setLoadingOpen] = useState(false);
   const [cancellingId, setCancellingId] = useState(null);
+  const [claimingTimeoutLobby, setClaimingTimeoutLobby] = useState(false);
 
   // 绠€鍖栫殑鐘舵€佸埛鏂板嚱鏁帮紙澶у巺椤典粎闇€瑕佽处鎴枫€佷綑棰濄€佸綋鍓嶆墍鍦ㄥ灞€ID锛?  
   const refreshState = useCallback(async () => {
@@ -121,6 +125,36 @@ export default function Game1Page({ onBack }) {
   // ... (绉婚櫎瀹氭椂鍒锋柊鐨?useEffect) ...
 
   // 鎷夊彇鍏紑鍙姞鍏ョ殑娓告垙鍒楄〃锛圠obby 涓旀湭鏈夌浜屼綅鐜╁锛?  
+  // Auto-claim timeout even in lobby (when not on play page)
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      try {
+        if (!currentGameId || currentGameId <= 0) return;
+        const { gomokuContract, signer } = getContracts();
+        const me = (await signer.getAddress()).toLowerCase();
+        const details = await gomokuContract.getGameDetails(currentGameId);
+        if (Number(details.status) !== 1) return; // not In Progress
+        const turn = details.turn?.toLowerCase();
+        if (turn === me) return; // only opponent can claim
+        const lastTs = Number(details.lastMoveTimestamp || 0);
+        if (!lastTs) return;
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (nowSec <= lastTs + TURN_TIMEOUT) return;
+        if (claimingTimeoutLobby) return;
+        setClaimingTimeoutLobby(true);
+        const tx = await gomokuContract.claimWinByTimeout(currentGameId);
+        await tx.wait();
+        refreshState();
+        refreshOpenGames();
+      } catch (e) {
+        // avoid spamming console
+      } finally {
+        setClaimingTimeoutLobby(false);
+      }
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [currentGameId, claimingTimeoutLobby, refreshState]);
+
   const refreshOpenGames = useCallback(async () => {
     try {
       setLoadingOpen(true);
