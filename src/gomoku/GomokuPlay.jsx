@@ -106,6 +106,14 @@ export default function GomokuPlay() {
     } catch {}
   }, [refresh]);
 
+  // Periodic refresh of game details and board every 500ms
+  useEffect(() => {
+    const timer = setInterval(() => {
+      refresh();
+    }, 500);
+    return () => clearInterval(timer);
+  }, [refresh]);
+
   const myTurn = useMemo(() => {
     if (!gameDetails || !account) return false;
     return (
@@ -165,27 +173,108 @@ export default function GomokuPlay() {
         </select>
       </div>
 
-      {board && board.length > 0 && (
-        <div style={boardTheme === 'wood' ? styles.boardWood : styles.board}>
-          {board.map((row, x) => (
-            <div key={x} style={{ ...styles.boardRow, gap: boardTheme === 'wood' ? 0 : 2 }}>
-              {row.map((cell, y) => (
+      {board && board.length > 0 && (() => {
+        const size = board.length;
+        const gap = boardTheme === 'wood' ? 0 : 2;
+        // generate letters skipping 'I' (A, B, C, D, E, F, G, H, J, K, ...)
+        const topLetters = (() => {
+          const out = [];
+          let code = 65; // 'A'
+          while (out.length < size) {
+            const ch = String.fromCharCode(code);
+            if (ch !== 'I') out.push(ch);
+            code++;
+          }
+          return out;
+        })();
+        const padding = 12; // matches styles.board/styles.boardWood padding
+        const border = boardTheme === 'wood' ? 3 : 1; // outer border thickness
+        // per-cell accumulated border for center stride (classic=2px, wood=1px)
+        const hBorder = boardTheme === 'wood' ? 1 : 2;
+        const vBorder = boardTheme === 'wood' ? 1 : 2;
+        const innerWidth = size * CELL_SIZE + gap * (size - 1);
+        const innerHeight = innerWidth; // square board
+
+        return (
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            {/* Board container */}
+            <div style={{ ...(boardTheme === 'wood' ? styles.boardWood : styles.board), position: 'relative' }}>
+              {board.map((row, x) => (
+                <div key={x} style={{ ...styles.boardRow, gap }}>
+                  {row.map((cell, y) => (
+                    <div
+                      key={`${x}-${y}`}
+                      style={{
+                        ...getCellStyle(boardTheme, myTurn, cell, x, y, size),
+                        color: cell === 1 ? '#111' : cell === 2 ? '#6b7280' : '#333',
+                      }}
+                      onClick={() => handleMove(x, y)}
+                      title={`${topLetters[y]}${x + 1}`}
+                    >
+                      {cell === 1 ? '\u25CF' : cell === 2 ? '\u25CB' : ''}
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              {/* Top letter labels (absolute per column to avoid drift) */}
+              {topLetters.map((ch, i) => (
                 <div
-                  key={`${x}-${y}`}
+                  key={i}
                   style={{
-                    ...getCellStyle(boardTheme, myTurn, cell, x, y, board.length),
-                    color: cell === 1 ? "#111" : cell === 2 ? "#6b7280" : "#333",
+                    position: 'absolute',
+                    top: 0,
+                    left:
+                      padding + i * (CELL_SIZE + gap + hBorder) + ((boardTheme === 'wood' && i === size - 1) ? (CELL_SIZE / 2) : ((CELL_SIZE + hBorder) / 2)),
+                    transform: 'translateX(-50%)',
+                    height: padding,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                    color: '#5c3b12',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: 0,
+                    width: CELL_SIZE,
                   }}
-                  onClick={() => handleMove(x, y)}
-                  title={`(${x + 1}, ${y + 1})`}
                 >
-                  {cell === 1 ? '\u25CF' : cell === 2 ? '\u25CB' : ''}
+                  {ch}
+                </div>
+              ))}
+
+              {/* Left numeric labels (absolute per row to avoid drift) */}
+              {Array.from({ length: size }, (_, i) => i + 1).map((n, r) => (
+                <div
+                  key={n}
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top:
+                      // 起点从棋盘内容区开始：padding（绝对定位相对内容区，不加 board 边框）
+                      padding +
+                      // 纵向每行步长：格高 + 单元格边框厚度（Classic=2，Wood=1），不包含横向 gap
+                      r * (CELL_SIZE + vBorder) +
+                      // 半格偏移；Wood 最后一行无下边线，单独使用 CELL_SIZE/2
+                      ((boardTheme === 'wood' && r === size - 1) ? (CELL_SIZE / 2) : ((CELL_SIZE + vBorder) / 2)),
+                    transform: 'translateY(-50%)',
+                    width: padding,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                    color: '#5c3b12',
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {n}
                 </div>
               ))}
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -282,7 +371,7 @@ const styles = {
     padding: 12,
     background: "#f6e3b4",
     borderRadius: 12,
-    border: "none", // no outer edge to avoid confusion with grid
+    border: "3px solid #5c3b12",
     boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
   },
   boardRow: {
@@ -308,6 +397,7 @@ const styles = {
     background: "#fff",
   },
 };
+
 
 
 

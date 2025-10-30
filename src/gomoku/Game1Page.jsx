@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ethers } from "ethers";
-// 移除所有旧的、分散的 ABI 和地址导入
+// 绉婚櫎鎵€鏈夋棫鐨勩€佸垎鏁ｇ殑 ABI 鍜屽湴鍧€瀵煎叆
 // import { GomokuABI } from "../contract/gomokuABI";
 // import { GOMOKU_ADDRESS } from "../contract/gomokuConfig";
 // import { CONTRACT_ADDRESS } from "../contract/contractConfig";
@@ -52,18 +52,18 @@ export default function Game1Page({ onBack }) {
   const [loadingOpen, setLoadingOpen] = useState(false);
   const [cancellingId, setCancellingId] = useState(null);
 
-  // 简化的状态刷新函数（大厅页仅需要账户、余额、当前所在对局ID）
+  // 绠€鍖栫殑鐘舵€佸埛鏂板嚱鏁帮紙澶у巺椤典粎闇€瑕佽处鎴枫€佷綑棰濄€佸綋鍓嶆墍鍦ㄥ灞€ID锛?  
   const refreshState = useCallback(async () => {
     try {
       const { gomokuContract, userVaultContract, signer } = getContracts();
       const currentAccount = await signer.getAddress();
       setAccount(currentAccount);
 
-      // 获取用户金库余额
+      // 鑾峰彇鐢ㄦ埛閲戝簱浣欓
       const userInfo = await userVaultContract.getUserInfo();
       setVaultBalance(userInfo.balance);
 
-      // 获取玩家当前所在的游戏
+      // 鑾峰彇鐜╁褰撳墠鎵€鍦ㄧ殑娓告垙
       const gid = await gomokuContract.playerCurrentGame(currentAccount);
       const idNum = Number(gid);
       setCurrentGameId(idNum);
@@ -73,61 +73,60 @@ export default function Game1Page({ onBack }) {
     }
   }, []);
 
-  // 初始化和事件监听
+  // 鍒濆鍖栧拰浜嬩欢鐩戝惉
   useEffect(() => {
-    initEthers()
-      .then(() => {
+  initEthers()
+    .then(() => {
+      refreshState();
+      // 拉取公开可加入的游戏
+      refreshOpenGames();
+
+      // 设置事件监听
+      const { gomokuContract } = getContracts();
+      gomokuContract.on("MoveMade", (gameId, player, x, y) => {
+        console.log(`Event: Move made in game ${gameId} by ${player}`);
         refreshState();
-        // 拉取公开可加入的游戏
+      });
+      gomokuContract.on("GameEnded", (gameId, winner, loser) => {
+        console.log(`Event: Game ${gameId} ended. Winner: ${winner}`);
+        refreshState();
         refreshOpenGames();
+      });
+      gomokuContract.on("GameStarted", (gameId, p1, p2) => {
+        console.log(`Event: Game ${gameId} started between ${p1} and ${p2}`);
+        refreshState();
+        refreshOpenGames();
+      });
+      gomokuContract.on("GameCreated", (gameId, p1, stake) => {
+        console.log(`Event: Game ${gameId} created by ${p1}`);
+        refreshOpenGames();
+      });
+    })
+    .catch((err) => setError(err.message));
 
-        // 设置事件监听器
-        const { gomokuContract } = getContracts();
-        gomokuContract.on("MoveMade", (gameId, player, x, y) => {
-          console.log(`Event: Move made in game ${gameId} by ${player}`);
-          refreshState();
-        });
-        gomokuContract.on("GameEnded", (gameId, winner, loser) => {
-          console.log(`Event: Game ${gameId} ended. Winner: ${winner}`);
-          refreshState();
-          refreshOpenGames();
-        });
-        gomokuContract.on("GameStarted", (gameId, p1, p2) => {
-            console.log(`Event: Game ${gameId} started between ${p1} and ${p2}`);
-            refreshState();
-            refreshOpenGames();
-        });
-        gomokuContract.on("GameCreated", (gameId, p1, stake) => {
-          console.log(`Event: Game ${gameId} created by ${p1}`);
-          refreshOpenGames();
-        });
-
-      })
-      .catch(err => setError(err.message));
-    
-    // 清理事件监听器
-    return () => {
-        try {
-            const { gomokuContract } = getContracts();
-            gomokuContract.removeAllListeners("MoveMade");
-            gomokuContract.removeAllListeners("GameEnded");
-            gomokuContract.removeAllListeners("GameStarted");
-            gomokuContract.removeAllListeners("GameCreated");
-        } catch (e) {
-            // 如果 getContracts 失败（例如，用户未连接钱包），则忽略
-        }
-    };
-  }, [refreshState]);
+  // 清理事件监听
+  return () => {
+    try {
+      const { gomokuContract } = getContracts();
+      gomokuContract.removeAllListeners("MoveMade");
+      gomokuContract.removeAllListeners("GameEnded");
+      gomokuContract.removeAllListeners("GameStarted");
+      gomokuContract.removeAllListeners("GameCreated");
+    } catch (e) {
+      // 如果 getContracts 失败（例如，用户未连接钱包），则忽略
+    }
+  };
+}, [refreshState]);
   
-  // ... (移除定时刷新的 useEffect) ...
+  // ... (绉婚櫎瀹氭椂鍒锋柊鐨?useEffect) ...
 
-  // 拉取公开可加入的游戏列表（Lobby 且未有第二位玩家）
+  // 鎷夊彇鍏紑鍙姞鍏ョ殑娓告垙鍒楄〃锛圠obby 涓旀湭鏈夌浜屼綅鐜╁锛?  
   const refreshOpenGames = useCallback(async () => {
     try {
       setLoadingOpen(true);
       const { gomokuContract } = getContracts();
       const counter = Number(await gomokuContract.gameCounter());
-      const limit = 80; // 最多向后查看 80 局，避免过多 RPC
+      const limit = 80; // 鏈€澶氬悜鍚庢煡鐪?80 灞€锛岄伩鍏嶈繃澶?RPC
       const start = Math.max(1, counter - limit + 1);
       const ids = Array.from({ length: counter - start + 1 }, (_, i) => start + i).reverse();
 
@@ -184,7 +183,7 @@ export default function Game1Page({ onBack }) {
       if (!balanceEnoughForCreate) { setError("Insufficient vault balance for stake"); return; }
       const tx = await gomokuContract.createGame(stakeWei);
       await tx.wait();
-      // 跳转到玩家当前所在对局
+      // 璺宠浆鍒扮帺瀹跺綋鍓嶆墍鍦ㄥ灞€
       const { signer, gomokuContract: gc } = getContracts();
       const me = await signer.getAddress();
       const gid = Number(await gc.playerCurrentGame(me));
@@ -211,7 +210,7 @@ export default function Game1Page({ onBack }) {
         // 为简化，我们暂时假设用户知道要加入的游戏的赌注
         const tx = await gomokuContract.joinGame(id);
         await tx.wait();
-        // 加入成功后跳转至对局页
+        // 加入成功后跳转至对局
         navigate(`/game1/${id}`);
       } catch (e) {
         console.error(e);
@@ -221,7 +220,7 @@ export default function Game1Page({ onBack }) {
       }
   };
 
-  // 大厅页不处理棋盘落子
+  // 澶у巺椤典笉澶勭悊妫嬬洏钀藉瓙
   const handleCancel = async (id) => {
     try {
       setCancellingId(id);
@@ -244,14 +243,24 @@ export default function Game1Page({ onBack }) {
       <h2 style={{ color: "#fff" }}>Gomoku</h2>
       {error && <div style={styles.error}>{error}</div>}
 
-      {/* 移除了地址设置和部署的 UI */}
+      {/* 绉婚櫎浜嗗湴鍧€璁剧疆鍜岄儴缃茬殑 UI */}
 
       <div style={styles.stateCard}>
         <div><strong>Your Vault Balance:</strong> {vaultBalance ? `${ethers.formatEther(vaultBalance)} ETH` : "-"}</div>
         {!balanceEnoughForCreate && stakeInput && (
           <div style={styles.warn}>Insufficient balance to create with current stake.</div>
         )}
-        
+        {currentGameId > 0 && (
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 14 }}>Current game: #{currentGameId}</div>
+            <button
+              style={styles.primaryBtn}
+              onClick={() => navigate(`/game1/${currentGameId}`)}
+            >
+              Enter
+            </button>
+          </div>
+        )}
       </div>
 
   <div style={styles.actionsRow}>
@@ -269,7 +278,7 @@ export default function Game1Page({ onBack }) {
           <button disabled={creating || !account} onClick={handleCreate} style={styles.primaryBtn}>
             {creating ? "Creating..." : "Create"}
           </button>
-          <div style={styles.hint}>Requires pre-transferring funds to the game pool.</div>
+          {/* Removed game pool pre-transfer hint */}
   </div>
 
         {/* ... Join Game card ... */}
@@ -289,7 +298,7 @@ export default function Game1Page({ onBack }) {
         </div>
       </div>
 
-      {/* 已创建的公开对局列表（移动到创建/加入之下） */}
+      {/* 宸插垱寤虹殑鍏紑瀵瑰眬鍒楄〃锛堢Щ鍔ㄥ埌鍒涘缓/鍔犲叆涔嬩笅锛?*/}
       <div style={styles.listCard}>
         <div style={styles.cardTitle}>Open Games</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
@@ -304,7 +313,7 @@ export default function Game1Page({ onBack }) {
           <div style={styles.hint}>No open games. Create one to start!</div>
         ) : (
           <div>
-            {/* 表头 */}
+            {/* 琛ㄥご */}
             <div style={{ ...styles.row, fontWeight: 600, borderTop: "none", paddingTop: 0 }}>
               <div style={{ flex: 1 }}>ID</div>
               <div style={{ flex: 3 }}>Creator</div>
@@ -353,7 +362,7 @@ export default function Game1Page({ onBack }) {
         )}
       </div>
 
-      {/* 去掉对局详情与棋盘展示，保持大厅功能 */}
+      {/* 鍘绘帀瀵瑰眬璇︽儏涓庢鐩樺睍绀猴紝淇濇寔澶у巺鍔熻兘 */}
     </div>
   );
 }
@@ -367,9 +376,8 @@ function shorten(addr) {
   }
 }
 
-// 取消游戏按钮组件（仅在大厅状态由创建者显示）
-// 取消游戏按钮已移动到对局页面 GomokuPlay.jsx 中
-
+// 鍙栨秷娓告垙鎸夐挳缁勪欢锛堜粎鍦ㄥぇ鍘呯姸鎬佺敱鍒涘缓鑰呮樉绀猴級
+// 鍙栨秷娓告垙鎸夐挳宸茬Щ鍔ㄥ埌瀵瑰眬椤甸潰 GomokuPlay.jsx 涓?
 const styles = {
   container: {
     position: "absolute",
@@ -506,3 +514,11 @@ const styles = {
     gap: 2,
   },
 };
+
+
+
+
+
+
+
+
