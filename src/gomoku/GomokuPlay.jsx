@@ -5,6 +5,7 @@ import { game1Bg } from "../backgroundImage";
 import { getContracts } from "../contract/contractService";
 
 const CELL_SIZE = 32;
+const TURN_TIMEOUT = 60; // seconds, keep in sync with contract
 
 // Classic white cell style
 const cellStyleClassic = (isMyTurn, value) => ({
@@ -108,7 +109,7 @@ export default function GomokuPlay() {
           status: Number(details.status),
           winner: details.winner,
           stake: details.stake,
-          moveCount: Number(details.moveCount),
+          moveCount: Number(details.moveCount),\n          lastMoveTimestamp: Number(details.lastMoveTimestamp || 0),
         });
         const b = await gomokuContract.getBoard(gameId);
         setBoard(b.map((row) => row.map((n) => Number(n))));
@@ -293,7 +294,7 @@ export default function GomokuPlay() {
 
         return (
           <div style={{ position: 'relative', display: 'inline-block' }}>
-            {/* Board container */}
+                        {typeof timeLeftSec === 'number' && (\r\n              <div style={{ ...styles.timerBadge, background: timeLeftSec <= 10 ? 'rgba(220,53,69,0.9)' : 'rgba(0,0,0,0.6)' }} title={gameDetails?.turn ? Turn:  : ''}>\r\n                Time Left: {formatTime(timeLeftSec)}\r\n              </div>\r\n            )}\r\n{/* Board container */}
             <div style={{ ...(boardTheme === 'wood' ? styles.boardWood : styles.board), position: 'relative' }}>
               {board.map((row, x) => (
                 <div key={x} style={{ ...styles.boardRow, gap }}>
@@ -489,7 +490,7 @@ const styles = {
     borderRadius: 6,
     marginTop: 8,
   },
-  board: {
+  timerBadge: {\r\n    position: 'absolute',\r\n    top: -28,\r\n    left: '50%',\r\n    transform: 'translateX(-50%)',\r\n    color: '#fff',\r\n    padding: '6px 10px',\r\n    borderRadius: 8,\r\n    fontWeight: 700,\r\n    fontSize: 14,\r\n    zIndex: 5,\r\n  },\r\n  board: {
     display: "inline-block",
     margin: "24px auto",
     padding: 12,
